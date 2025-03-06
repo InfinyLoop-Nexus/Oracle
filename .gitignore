@@ -1,3 +1,12 @@
+# Databases
+oracle.db
+/data/test_oracle.db
+/data/dev_oracle.db
+
+# IDEs
+.idea
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -169,3 +178,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+

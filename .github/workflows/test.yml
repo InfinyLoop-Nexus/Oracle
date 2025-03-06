@@ -1,0 +1,107 @@
+name: Run Pytest on PRs
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    branches:
+      - main
+
+permissions:
+  contents: write  # Needed for auto-committing Black formatting
+
+jobs:
+
+  Format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Black
+        run: |
+          source .venv/bin/activate
+          black .
+
+      - name: Commit changes if any
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-format with Black"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  Errors:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Ruff
+        run: |
+          source .venv/bin/activate
+          ruff check .
+
+  Tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run tests with coverage
+        run: |
+          source .venv/bin/activate
+          coverage run -m pytest -v -s
+
+      - name: Generate Coverage Report  
+        run: |
+          source .venv/bin/activate
+          coverage report -m
