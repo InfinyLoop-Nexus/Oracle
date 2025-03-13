@@ -48,8 +48,12 @@ jobs:
           git add .
           git diff --quiet && git diff --staged --quiet || git commit -m "Auto-format with Black"
           git push
+          
+          # Trigger a new workflow run after Black commits changes
+          gh workflow run "Run Pytest on PRs" --ref "${{ github.head_ref }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
   Errors:
     runs-on: ubuntu-latest
