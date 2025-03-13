@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write  # Needed for committing Black formatting
+  actions: write   # Allows triggering workflows
 
 jobs:
 
@@ -21,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}  # Ensure PR branch is checked out
+          token: ${{ secrets.GITHUB_TOKEN }}  # Ensure permissions for pushing
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,9 +55,19 @@ jobs:
           git add .
           git commit -m "Auto-format with Black"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}  # Push to PR branch
-          
-          # Stop this workflow so that GitHub triggers a new one on the new commit
-          exit 1
+
+      - name: Trigger new workflow run after formatting
+        if: steps.black_check.outcome == 'failure'  # Only trigger if formatting was needed
+        run: |
+          gh api repos/${{ github.repository }}/actions/workflows/Run%20Pytest%20on%20PRs.yml/dispatches \
+            -X POST \
+            -F ref=${{ github.event.pull_request.head.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stop execution since new commit was pushed
+        if: steps.black_check.outcome == 'failure'
+        run: exit 1  # Stop the current workflow so it doesn't continue running on outdated code
 
   Errors:
     needs: Format  # Runs only if Format completes successfully
@@ -65,7 +77,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}  # Ensure PR branch is checked out
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -94,7 +106,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}  # Ensure PR branch is checked out
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
