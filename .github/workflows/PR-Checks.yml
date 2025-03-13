@@ -59,7 +59,7 @@ jobs:
       - name: Trigger new workflow run after formatting
         if: steps.black_check.outcome == 'failure'  # Only trigger if formatting was needed
         run: |
-          gh api repos/${{ github.repository }}/actions/workflows/Run%20Pytest%20on%20PRs.yml/dispatches \
+          gh api repos/${{ github.repository }}/actions/workflows/PR-Checks.yml/dispatches \
             -X POST \
             -F ref=${{ github.event.pull_request.head.ref }}
         env:
