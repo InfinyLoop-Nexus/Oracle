@@ -13,7 +13,6 @@ permissions:
   pull-requests: write
 
 jobs:
-
   Format:
     runs-on: ubuntu-latest
     steps:
@@ -22,25 +21,24 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Set up Python
+      - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-
       - name: Install Poetry
         run: pip install poetry
+      - name: Configure Poetry and Install Dependencies
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install
 
-      - name: Configure Poetry to Use Virtualenv
-        run: poetry config virtualenvs.in-project true
-
-      - name: Install Dependencies
-        run: poetry install
-
-      - name: Check Black formatting
-        id: black
+      - name: Run Black Check
         run: |
           source .venv/bin/activate
-          black --check . 2>&1 | tee black_output.txt || (echo "failed" > black_failed.txt; echo "::set-output name=BLACK_FAIL::true")
+          if ! black --check . 2>&1 | tee black_output.txt; then
+            echo "failed" > black_failed.txt
+            exit 1
+          fi
 
       - name: Upload Black Output
         if: always()
@@ -48,10 +46,6 @@ jobs:
         with:
           name: black_output
           path: black_output.txt
-
-      - name: Fail if Black Failed
-        if: steps.black.outputs.BLACK_FAIL == 'true'
-        run: exit 1
 
   Errors:
     runs-on: ubuntu-latest
@@ -61,25 +55,24 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Set up Python
+      - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-
       - name: Install Poetry
         run: pip install poetry
+      - name: Configure Poetry and Install Dependencies
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install
 
-      - name: Configure Poetry to Use Virtualenv
-        run: poetry config virtualenvs.in-project true
-
-      - name: Install Dependencies
-        run: poetry install
-
-      - name: Run Ruff
-        id: ruff
+      - name: Run Ruff Check
         run: |
           source .venv/bin/activate
-          ruff check . 2>&1 | tee ruff_output.txt || (echo "failed" > ruff_failed.txt; echo "::set-output name=RUFF_FAIL::true")
+          if ! ruff check . 2>&1 | tee ruff_output.txt; then
+            echo "failed" > ruff_failed.txt
+            exit 1
+          fi
 
       - name: Upload Ruff Output
         if: always()
@@ -87,10 +80,6 @@ jobs:
         with:
           name: ruff_output
           path: ruff_output.txt
-
-      - name: Fail if Ruff Failed
-        if: steps.ruff.outputs.RUFF_FAIL == 'true'
-        run: exit 1
 
   Tests:
     runs-on: ubuntu-latest
@@ -100,32 +89,31 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Set up Python
+      - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-
       - name: Install Poetry
         run: pip install poetry
+      - name: Configure Poetry and Install Dependencies
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install
 
-      - name: Configure Poetry to Use Virtualenv
-        run: poetry config virtualenvs.in-project true
-
-      - name: Install Dependencies
-        run: poetry install
-
-      - name: Run tests with coverage
-        id: pytest
+      - name: Run Tests with Coverage
         run: |
           source .venv/bin/activate
-          coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt || (echo "failed" > pytest_failed.txt; echo "::set-output name=PYTEST_FAIL::true")
+          if ! coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt; then
+            echo "failed" > pytest_failed.txt
+            exit 1
+          fi
 
       - name: Generate Coverage Report
         run: |
           source .venv/bin/activate
           coverage report -m 2>&1 | tee coverage_output.txt
 
-      - name: Upload Pytest Output
+      - name: Upload Test Output
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -139,54 +127,55 @@ jobs:
           name: coverage_output
           path: coverage_output.txt
 
-      - name: Fail if Pytest Failed
-        if: steps.pytest.outputs.PYTEST_FAIL == 'true'
-        run: exit 1
-
   Summary:
+    if: always()
     needs: [Format, Errors, Tests]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all outputs
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Create Summary Comment
+      - name: Create and Post Summary Comment
         uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
-
             let summary = "## CI Check Summary\n";
 
-            function readOutput(file, defaultMsg) {
-                return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : defaultMsg;
+            function readFile(path, fallback) {
+              return fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : fallback;
             }
 
-            // Black Formatting Check
+            // Black check
             const blackFailed = fs.existsSync('artifacts/black_failed.txt');
-            const blackOutput = readOutput('artifacts/black_output/black_output.txt', "Black formatting check passed.");
-            summary += blackFailed ? `### ❌ Black Formatting Failed\n\`\`\`\n${blackOutput}\n\`\`\`\n` : "- ✅ **Black Formatting Passed**\n";
+            const blackOutput = readFile('artifacts/black_output/black_output.txt', "Black check passed.");
+            summary += blackFailed 
+              ? `### ❌ Black Formatting Failed\n\`\`\`\n${blackOutput}\n\`\`\`\n`
+              : "- ✅ Black Formatting Passed\n";
 
-            // Ruff Check
+            // Ruff check
             const ruffFailed = fs.existsSync('artifacts/ruff_failed.txt');
-            const ruffOutput = readOutput('artifacts/ruff_output/ruff_output.txt', "Ruff linting passed.");
-            summary += ruffFailed ? `### ❌ Ruff Linting Failed\n\`\`\`\n${ruffOutput}\n\`\`\`\n` : "- ✅ **Ruff Linting Passed**\n";
+            const ruffOutput = readFile('artifacts/ruff_output/ruff_output.txt', "Ruff check passed.");
+            summary += ruffFailed 
+              ? `### ❌ Ruff Linting Failed\n\`\`\`\n${ruffOutput}\n\`\`\`\n`
+              : "- ✅ Ruff Linting Passed\n";
 
-            // Pytest
+            // Pytest check
             const pytestFailed = fs.existsSync('artifacts/pytest_failed.txt');
-            const pytestOutput = readOutput('artifacts/pytest_output/pytest_output.txt', "All tests passed.");
-            summary += pytestFailed ? `### ❌ Tests Failed\n\`\`\`\n${pytestOutput}\n\`\`\`\n` : "- ✅ **All Tests Passed**\n";
+            const pytestOutput = readFile('artifacts/pytest_output/pytest_output.txt', "Tests passed.");
+            summary += pytestFailed 
+              ? `### ❌ Tests Failed\n\`\`\`\n${pytestOutput}\n\`\`\`\n`
+              : "- ✅ Tests Passed\n";
 
             // Coverage
-            const coverageOutput = readOutput('artifacts/coverage_output/coverage_output.txt', "No coverage report available.");
-            summary += `### 📊 Test Coverage Report\n\`\`\`\n${coverageOutput}\n\`\`\`\n`;
+            const coverageOutput = readFile('artifacts/coverage_output/coverage_output.txt', "No coverage report available.");
+            summary += `### 📊 Coverage Report\n\`\`\`\n${coverageOutput}\n\`\`\`\n`;
 
-            // Post the comment
             github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: summary
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
             });
