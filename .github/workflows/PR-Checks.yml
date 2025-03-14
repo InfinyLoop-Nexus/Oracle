@@ -7,11 +7,12 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:  # Allows manual triggering
+    types:
+      - opened
+      - synchronize  # 🔥 Ensures tests always run when a PR is updated
 
 permissions:
   contents: write  # Needed for committing Black formatting
-  actions: write   # Needed for triggering workflows
 
 jobs:
 
@@ -55,22 +56,16 @@ jobs:
           git add .
           git commit -m "Auto-format with Black"
           
-          # Push using the repo-scoped token instead of GITHUB_TOKEN
+          # 🔥 Push using the repo-scoped token instead of GITHUB_TOKEN
           git push https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
 
-      - name: Manually trigger workflow on new commit
-        if: steps.black_check.outcome == 'failure'
-        run: |
-          gh api repos/${{ github.repository }}/actions/workflows/PR-Checks.yml/dispatches \
-            -X POST \
-            -F ref=${{ github.event.pull_request.head.ref }}
-        env:
-          GH_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+          # 🔥 Ensure GitHub detects a change in PR by resetting the last commit and re-committing
+          git reset --soft HEAD~1
+          git commit --amend -m "Auto-format with Black (trigger checks)"
+          git push --force https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
 
-
-      - name: Stop execution to ensure tests run on the latest commit
-        if: steps.black_check.outcome == 'failure'
-        run: exit 1
+          # Stop execution so GitHub re-triggers the workflow on the latest commit
+          exit 1
 
   Errors:
     needs: Format
