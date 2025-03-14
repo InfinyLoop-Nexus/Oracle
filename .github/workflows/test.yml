@@ -20,26 +20,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-
       - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Configure Poetry and Install Dependencies
+      - name: Install Poetry and Dependencies
         run: |
+          pip install poetry
           poetry config virtualenvs.in-project true
           poetry install
-
       - name: Run Black Check
         run: |
+          set -o pipefail
           source .venv/bin/activate
           if ! black --check . 2>&1 | tee black_output.txt; then
             echo "failed" > black_failed.txt
             exit 1
           fi
-
       - name: Upload Black Output
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,26 +51,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-
       - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Configure Poetry and Install Dependencies
+      - name: Install Poetry and Dependencies
         run: |
+          pip install poetry
           poetry config virtualenvs.in-project true
           poetry install
-
       - name: Run Ruff Check
         run: |
+          set -o pipefail
           source .venv/bin/activate
           if ! ruff check . 2>&1 | tee ruff_output.txt; then
             echo "failed" > ruff_failed.txt
             exit 1
           fi
-
       - name: Upload Ruff Output
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,38 +82,34 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-
       - name: Setup Python and Poetry
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.1'
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Configure Poetry and Install Dependencies
+      - name: Install Poetry and Dependencies
         run: |
+          pip install poetry
           poetry config virtualenvs.in-project true
           poetry install
-
       - name: Run Tests with Coverage
         run: |
+          set -o pipefail
           source .venv/bin/activate
           if ! coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt; then
             echo "failed" > pytest_failed.txt
             exit 1
           fi
-
       - name: Generate Coverage Report
         run: |
+          set -o pipefail
           source .venv/bin/activate
           coverage report -m 2>&1 | tee coverage_output.txt
-
       - name: Upload Test Output
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest_output
           path: pytest_output.txt
-
       - name: Upload Coverage Report
         if: always()
         uses: actions/upload-artifact@v4
@@ -136,12 +126,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
       - name: Create and Post Summary Comment
         uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
+
             let summary = "## CI Check Summary\n";
 
             function readFile(path, fallback) {
@@ -169,7 +159,7 @@ jobs:
               ? `### ❌ Tests Failed\n\`\`\`\n${pytestOutput}\n\`\`\`\n`
               : "- ✅ Tests Passed\n";
 
-            // Coverage
+            // Coverage Report
             const coverageOutput = readFile('artifacts/coverage_output/coverage_output.txt', "No coverage report available.");
             summary += `### 📊 Coverage Report\n\`\`\`\n${coverageOutput}\n\`\`\`\n`;
 
