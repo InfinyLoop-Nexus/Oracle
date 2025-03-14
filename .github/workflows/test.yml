@@ -16,7 +16,6 @@ jobs:
 
   Format:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,7 +40,7 @@ jobs:
         id: black
         run: |
           source .venv/bin/activate
-          black --check . 2>&1 | tee black_output.txt || (echo "failed" > black_failed.txt && exit 1)
+          black --check . 2>&1 | tee black_output.txt || (echo "failed" > black_failed.txt; echo "BLACK_FAIL=true" >> $GITHUB_ENV)
 
       - name: Upload Black Output
         if: always()
@@ -50,9 +49,12 @@ jobs:
           name: black_output
           path: black_output.txt
 
+      - name: Fail if Black Failed
+        if: env.BLACK_FAIL == 'true'
+        run: exit 1
+
   Errors:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,7 +79,7 @@ jobs:
         id: ruff
         run: |
           source .venv/bin/activate
-          ruff check . 2>&1 | tee ruff_output.txt || (echo "failed" > ruff_failed.txt && exit 1)
+          ruff check . 2>&1 | tee ruff_output.txt || (echo "failed" > ruff_failed.txt; echo "RUFF_FAIL=true" >> $GITHUB_ENV)
 
       - name: Upload Ruff Output
         if: always()
@@ -86,9 +88,12 @@ jobs:
           name: ruff_output
           path: ruff_output.txt
 
+      - name: Fail if Ruff Failed
+        if: env.RUFF_FAIL == 'true'
+        run: exit 1
+
   Tests:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,7 +118,7 @@ jobs:
         id: pytest
         run: |
           source .venv/bin/activate
-          coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt || (echo "failed" > pytest_failed.txt && exit 1)
+          coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt || (echo "failed" > pytest_failed.txt; echo "PYTEST_FAIL=true" >> $GITHUB_ENV)
 
       - name: Generate Coverage Report
         run: |
@@ -133,6 +138,10 @@ jobs:
         with:
           name: coverage_output
           path: coverage_output.txt
+
+      - name: Fail if Pytest Failed
+        if: env.PYTEST_FAIL == 'true'
+        run: exit 1
 
   Summary:
     needs: [Format, Errors, Tests]
