@@ -7,11 +7,7 @@ on:
   pull_request:
     branches:
       - main
-  workflow_run:
-    workflows: ["PR-Checks.yml"]  # Ensures tests run on the latest commit
-    types:
-      - completed
-  
+
 permissions:
   contents: write  # Needed for committing Black formatting
 
@@ -56,11 +52,15 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Auto-format with Black"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
           
-          # Push a No-Op commit to ensure GitHub triggers the PR checks on the latest commit
-          git commit --allow-empty -m "Trigger PR checks on formatted commit"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          # Push using a PAT to ensure GitHub recognizes the commit
+          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
+
+          # 🚀 Trick GitHub into recognizing the push by updating branch history
+          # This ensures GitHub sees it as a *real* commit change
+          git reset --soft HEAD~1
+          git commit --amend -m "Auto-format with Black (forced trigger)"
+          git push --force https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
           
           # Stop execution so GitHub re-triggers the workflow on the latest commit
           exit 1
