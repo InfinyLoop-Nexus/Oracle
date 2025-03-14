@@ -61,11 +61,12 @@ jobs:
       - name: Manually trigger workflow on new commit
         if: steps.black_check.outcome == 'failure'
         run: |
-          gh api repos/${{ github.repository }}/actions/workflows/$(basename $GITHUB_WORKFLOW)/dispatches \
+          gh api repos/${{ github.repository }}/actions/workflows/PR-Checks.yml/dispatches \
             -X POST \
             -F ref=${{ github.event.pull_request.head.ref }}
         env:
           GH_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+
 
       - name: Stop execution to ensure tests run on the latest commit
         if: steps.black_check.outcome == 'failure'
