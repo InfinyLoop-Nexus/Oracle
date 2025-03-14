@@ -8,7 +8,7 @@ on:
     branches:
       - main
   workflow_run:
-    workflows: ["Check Format, Errors, and Tests"]  # Ensures tests run on the latest commit
+    workflows: ["PR-Checks.yml"]  # Ensures tests run on the latest commit
     types:
       - completed
   
