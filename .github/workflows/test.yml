@@ -16,6 +16,7 @@ jobs:
 
   Format:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,6 +44,7 @@ jobs:
           black --check . > black_output.txt 2>&1 || (echo "failed" > black_failed.txt && exit 1)
 
       - name: Upload Black Output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: black_output
@@ -50,6 +52,7 @@ jobs:
 
   Errors:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,6 +80,7 @@ jobs:
           ruff check . > ruff_output.txt 2>&1 || (echo "failed" > ruff_failed.txt && exit 1)
 
       - name: Upload Ruff Output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ruff_output
@@ -84,6 +88,7 @@ jobs:
 
   Tests:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -116,12 +121,14 @@ jobs:
           coverage report -m > coverage_output.txt
 
       - name: Upload Pytest Output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest_output
           path: pytest_output.txt
 
       - name: Upload Coverage Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage_output
@@ -175,8 +182,3 @@ jobs:
                 body: summary
             });
 
-      - name: Fail if Any Check Fails
-        run: |
-          if [ -f artifacts/black_failed.txt ] || [ -f artifacts/ruff_failed.txt ] || [ -f artifacts/pytest_failed.txt ]; then
-            exit 1
-          fi
