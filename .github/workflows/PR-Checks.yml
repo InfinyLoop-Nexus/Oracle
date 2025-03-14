@@ -7,7 +7,11 @@ on:
   pull_request:
     branches:
       - main
-
+  workflow_run:
+    workflows: ["Check Format, Errors, and Tests"]  # Ensures tests run on the latest commit
+    types:
+      - completed
+  
 permissions:
   contents: write  # Needed for committing Black formatting
 
