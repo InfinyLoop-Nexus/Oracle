@@ -7,9 +7,11 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:  # Allows manual triggering
 
 permissions:
   contents: write  # Needed for committing Black formatting
+  actions: write   # Needed for triggering workflows
 
 jobs:
 
@@ -55,6 +57,19 @@ jobs:
           
           # Push using the repo-scoped token instead of GITHUB_TOKEN
           git push https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Manually trigger workflow on new commit
+        if: steps.black_check.outcome == 'failure'
+        run: |
+          gh api repos/${{ github.repository }}/actions/workflows/$(basename $GITHUB_WORKFLOW)/dispatches \
+            -X POST \
+            -F ref=${{ github.event.pull_request.head.ref }}
+        env:
+          GH_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+
+      - name: Stop execution to ensure tests run on the latest commit
+        if: steps.black_check.outcome == 'failure'
+        run: exit 1
 
   Errors:
     needs: Format
