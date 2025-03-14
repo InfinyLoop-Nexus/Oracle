@@ -20,7 +20,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}  # Ensure PR branch is checked out
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,29 +44,20 @@ jobs:
           black --check .  # Check if formatting is needed
 
       - name: Auto-format and push if needed
-        if: steps.black_check.outcome == 'failure'  # Only run if Black detected issues
+        if: steps.black_check.outcome == 'failure'
         run: |
           source .venv/bin/activate
           black .  # Auto-fix formatting
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "My GitHub Username"  # Use your GitHub username
+          git config --global user.email "myemail@example.com"  # Use your GitHub email
           git add .
           git commit -m "Auto-format with Black"
           
-          # Push using a PAT to ensure GitHub recognizes the commit
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
-
-          # 🚀 Trick GitHub into recognizing the push by updating branch history
-          # This ensures GitHub sees it as a *real* commit change
-          git reset --soft HEAD~1
-          git commit --amend -m "Auto-format with Black (forced trigger)"
-          git push --force https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
-          
-          # Stop execution so GitHub re-triggers the workflow on the latest commit
-          exit 1
+          # Push using the repo-scoped token instead of GITHUB_TOKEN
+          git push https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
 
   Errors:
-    needs: Format  # Runs only if Format completes successfully
+    needs: Format
     runs-on: ubuntu-latest
 
     steps:
@@ -95,7 +86,7 @@ jobs:
           ruff check .
 
   Tests:
-    needs: Format  # Runs only if Format completes successfully
+    needs: Format
     runs-on: ubuntu-latest
 
     steps:
