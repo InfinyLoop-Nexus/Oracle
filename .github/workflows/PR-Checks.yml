@@ -1,0 +1,129 @@
+name: Check Format, Errors, and Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write  # Needed for committing Black formatting
+
+jobs:
+
+  Format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}  # Ensure PR branch is checked out
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Black (check only)
+        id: black_check
+        continue-on-error: true  # Allow workflow to continue even if Black fails
+        run: |
+          source .venv/bin/activate
+          black --check .  # Check if formatting is needed
+
+      - name: Auto-format and push if needed
+        if: steps.black_check.outcome == 'failure'  # Only run if Black detected issues
+        run: |
+          source .venv/bin/activate
+          black .  # Auto-fix formatting
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Auto-format with Black"
+          
+          # Push using a PAT to ensure GitHub recognizes the commit
+          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
+
+          # 🚀 Trick GitHub into recognizing the push by updating branch history
+          # This ensures GitHub sees it as a *real* commit change
+          git reset --soft HEAD~1
+          git commit --amend -m "Auto-format with Black (forced trigger)"
+          git push --force https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
+          
+          # Stop execution so GitHub re-triggers the workflow on the latest commit
+          exit 1
+
+  Errors:
+    needs: Format  # Runs only if Format completes successfully
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Ruff
+        run: |
+          source .venv/bin/activate
+          ruff check .
+
+  Tests:
+    needs: Format  # Runs only if Format completes successfully
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run tests with coverage
+        run: |
+          source .venv/bin/activate
+          coverage run -m pytest -v -s
+
+      - name: Generate Coverage Report  
+        run: |
+          source .venv/bin/activate
+          coverage report -m
