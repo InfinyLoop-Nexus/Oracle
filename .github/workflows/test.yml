@@ -174,34 +174,27 @@ jobs:
 
             // Black Check
             const blackMarker = 'artifacts/black_marker/black_failed.txt';
-            const blackOutputPath = 'artifacts/black_output/black_output.txt';
-            const blackFailed = fs.existsSync(blackMarker);
-            const blackOutput = readFile(blackOutputPath, "Black check passed.");
-            summary += blackFailed 
-              ? `### ❌ Black Formatting Failed\n\`\`\`\n${blackOutput}\n\`\`\`\n`
-              : "- ✅ Black Formatting Passed\n";
+            const blackOutput = readFile('artifacts/black_output/black_output.txt', "Black check passed.");
+            summary += fs.existsSync(blackMarker) 
+              ? `### ❌ :red_circle: Black Formatting Failed\n\`\`\`\n${blackOutput}\n\`\`\`\n`
+              : "- ✅ :green_circle: Black Formatting Passed\n";
 
             // Ruff Check
             const ruffMarker = 'artifacts/ruff_marker/ruff_failed.txt';
-            const ruffOutputPath = 'artifacts/ruff_output/ruff_output.txt';
-            const ruffFailed = fs.existsSync(ruffMarker);
-            const ruffOutput = readFile(ruffOutputPath, "Ruff check passed.");
-            summary += ruffFailed 
-              ? `### ❌ Ruff Linting Failed\n\`\`\`\n${ruffOutput}\n\`\`\`\n`
-              : "- ✅ Ruff Linting Passed\n";
+            const ruffOutput = readFile('artifacts/ruff_output/ruff_output.txt', "Ruff check passed.");
+            summary += fs.existsSync(ruffMarker) 
+              ? `### ❌ :red_circle: Ruff Linting Failed\n\`\`\`\n${ruffOutput}\n\`\`\`\n`
+              : "- ✅ :green_circle: Ruff Linting Passed\n";
 
             // Pytest Check
             const pytestMarker = 'artifacts/pytest_marker/pytest_failed.txt';
-            const pytestOutputPath = 'artifacts/pytest_output/pytest_output.txt';
-            const pytestFailed = fs.existsSync(pytestMarker);
-            const pytestOutput = readFile(pytestOutputPath, "Tests passed.");
-            summary += pytestFailed 
-              ? `### ❌ Tests Failed\n\`\`\`\n${pytestOutput}\n\`\`\`\n`
-              : "- ✅ Tests Passed\n";
+            const pytestOutput = readFile('artifacts/pytest_output/pytest_output.txt', "Tests passed.");
+            summary += fs.existsSync(pytestMarker) 
+              ? `### ❌ :red_circle: Tests Failed\n\`\`\`\n${pytestOutput}\n\`\`\`\n`
+              : "- ✅ :green_circle: Tests Passed\n";
 
             // Coverage Report
-            const coverageOutputPath = 'artifacts/coverage_output/coverage_output.txt';
-            const coverageOutput = readFile(coverageOutputPath, "No coverage report available.");
+            const coverageOutput = readFile('artifacts/coverage_output/coverage_output.txt', "No coverage report available.");
             summary += `### 📊 Coverage Report\n\`\`\`\n${coverageOutput}\n\`\`\`\n`;
 
             github.rest.issues.createComment({
@@ -210,3 +203,49 @@ jobs:
               issue_number: context.issue.number,
               body: summary
             });
+
+      - name: Update PR Labels
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            // Check if any marker file exists:
+            const hasFailure = fs.existsSync('artifacts/black_marker/black_failed.txt') ||
+                               fs.existsSync('artifacts/ruff_marker/ruff_failed.txt') ||
+                               fs.existsSync('artifacts/pytest_marker/pytest_failed.txt');
+            if (hasFailure) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: "Passed"
+                });
+              } catch (e) {
+                // label might not exist
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ["Failed"]
+              });
+            } else {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: "Failed"
+                });
+              } catch (e) {
+                // label might not exist
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ["Passed"]
+              });
+            }
+
