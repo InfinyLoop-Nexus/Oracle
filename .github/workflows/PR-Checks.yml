@@ -7,7 +7,10 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: # Manual trigger
+  workflow_run:
+    workflows: ["PR-Checks"]  # 👈 This ensures tests run on the new formatted commit
+    types:
+      - completed
 
 permissions:
   contents: write  # Needed for committing Black formatting
@@ -56,15 +59,6 @@ jobs:
           git add .
           git commit -m "Auto-format with Black"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}  # Push to PR branch
-
-      - name: Trigger new workflow run after formatting
-        if: steps.black_check.outcome == 'failure'  # Only trigger if formatting was needed
-        run: |
-          gh api repos/${{ github.repository }}/actions/workflows/PR-Checks.yml/dispatches \
-            -X POST \
-            -F ref=${{ github.event.pull_request.head.ref }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Stop execution since new commit was pushed
         if: steps.black_check.outcome == 'failure'
