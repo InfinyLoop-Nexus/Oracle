@@ -1,0 +1,72 @@
+name: CI Checks (Tests & Lint)
+on:
+  workflow_run:
+    workflows: ["Auto Format"]        # triggers after the "Auto Format" workflow...
+    types: [completed]               # ...when it finishes (whether success or failure)
+
+permissions:
+  contents: read   # read-only code access for checking out
+
+jobs:
+  Errors:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}   # only run if Auto Format succeeded
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Ruff
+        run: |
+          source .venv/bin/activate
+          ruff check .
+
+  Tests:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}   # only run if Auto Format succeeded
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.1'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Configure Poetry to Use Virtualenv
+        run: poetry config virtualenvs.in-project true
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run tests with coverage
+        run: |
+          source .venv/bin/activate
+          coverage run -m pytest -v -s
+
+      - name: Generate Coverage Report  
+        run: |
+          source .venv/bin/activate
+          coverage report -m

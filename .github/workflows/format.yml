@@ -1,18 +1,11 @@
-name: Check Format, Errors, and Tests
-
+name: Auto Format
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize  # 🔥 Ensures tests always run when a PR is updated
+    types: [opened, synchronize, reopened]  # Run on new PRs and when commits are pushed to the PR
 
 permissions:
-  contents: write  # Needed for committing Black formatting
+  contents: write   # allow this workflow to push to the repo
+
 
 jobs:
 
@@ -20,10 +13,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,7 +35,7 @@ jobs:
 
       - name: Run Black (check only)
         id: black_check
-        continue-on-error: true  # Allow workflow to continue even if Black fails
+        continue-on-error: true 
         run: |
           source .venv/bin/activate
           black --check .  # Check if formatting is needed
@@ -51,21 +45,13 @@ jobs:
         run: |
           source .venv/bin/activate
           black .  # Auto-fix formatting
-          git config --global user.name "My GitHub Username"  # Use your GitHub username
-          git config --global user.email "myemail@example.com"  # Use your GitHub email
-          git add .
-          git commit -m "Auto-format with Black"
-          
-          # 🔥 Push using the repo-scoped token instead of GITHUB_TOKEN
-          git push https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
-
-          # 🔥 Ensure GitHub detects a change in PR by resetting the last commit and re-committing
-          git reset --soft HEAD~1
-          git commit --amend -m "Auto-format with Black (trigger checks)"
-          git push --force https://x-access-token:${{ secrets.REPO_SCOPED_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
-
-          # Stop execution so GitHub re-triggers the workflow on the latest commit
-          exit 1
+          git config --local user.name "GitHub Actions"
+          git config --local user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: auto-format code"
+          # Push to the PR's branch
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          git push origin "HEAD:$BRANCH_NAME"
 
   Errors:
     needs: Format
