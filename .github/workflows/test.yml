@@ -152,7 +152,7 @@ jobs:
           path: pytest_failed.txt
 
   Summary:
-    if: always()
+    if: github.event_name == 'pull_request'
     needs: [Format, Errors, Tests]
     runs-on: ubuntu-latest
     steps:
