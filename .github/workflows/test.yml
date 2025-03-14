@@ -41,7 +41,7 @@ jobs:
         id: black
         run: |
           source .venv/bin/activate
-          black --check . > black_output.txt 2>&1 || (echo "failed" > black_failed.txt && exit 1)
+          black --check . 2>&1 | tee black_output.txt || (echo "failed" > black_failed.txt && exit 1)
 
       - name: Upload Black Output
         if: always()
@@ -77,7 +77,7 @@ jobs:
         id: ruff
         run: |
           source .venv/bin/activate
-          ruff check . > ruff_output.txt 2>&1 || (echo "failed" > ruff_failed.txt && exit 1)
+          ruff check . 2>&1 | tee ruff_output.txt || (echo "failed" > ruff_failed.txt && exit 1)
 
       - name: Upload Ruff Output
         if: always()
@@ -113,12 +113,12 @@ jobs:
         id: pytest
         run: |
           source .venv/bin/activate
-          coverage run -m pytest -v -s > pytest_output.txt 2>&1 || (echo "failed" > pytest_failed.txt && exit 1)
+          coverage run -m pytest -v -s 2>&1 | tee pytest_output.txt || (echo "failed" > pytest_failed.txt && exit 1)
 
       - name: Generate Coverage Report
         run: |
           source .venv/bin/activate
-          coverage report -m > coverage_output.txt
+          coverage report -m 2>&1 | tee coverage_output.txt
 
       - name: Upload Pytest Output
         if: always()
@@ -148,7 +148,6 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const { github, context } = require('@actions/github');
 
             let summary = "## CI Check Summary\n";
 
@@ -177,8 +176,8 @@ jobs:
 
             // Post the comment
             github.rest.issues.createComment({
-                ...context.repo,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
                 issue_number: context.issue.number,
                 body: summary
             });
-
