@@ -1,4 +1,3 @@
-from json import dumps
 from data.models.user import User
 from data.models.search import Search
 from tests.fixtures import test_client_as_user, test_db_session  # noqa: F401
@@ -69,8 +68,6 @@ def test_upsert_search_create(test_client_as_user, test_db_session): # noqa: F81
     assert result["id"] == 1
     assert_dictionaries_are_equal_except(result, payload, ["created_at", "updated_at", "id", "user_id"])
 
-
-
 def test_upsert_search_update_own(test_client_as_user, test_db_session): # noqa: F811
     # create a search record assigned to the current user (assumed id=1)
     search = Search(
@@ -86,9 +83,9 @@ def test_upsert_search_update_own(test_client_as_user, test_db_session): # noqa:
     test_db_session.commit()
     test_db_session.refresh(search)
 
-    payload = search.model_dump()
-    payload["job_title"] = "Updated"
-    result = test_client_as_user.post("/search/", json=payload)
+    search.job_title = "Updated"
+
+    result = test_client_as_user.post("/search/update", json=search.model_dump_json())
     assert result.status_code == 200
     data = result.json()
     assert data["job_title"] == "Updated"
