@@ -16,14 +16,15 @@ def test_client():
         yield client
 
 
-@pytest.fixture(scope="function")
-def test_client_as_user():
+def create_test_client_with_user(is_admin=False):
     init_db(drop_existing=True)
     user = User(
         username="testuser",
         email="test@example.com",
         password_hash=f"{HashHelper.hash('password')}",
     )
+    user.admin = is_admin
+
     with Session(engine) as session:
         session.add(user)
         session.commit()
@@ -35,7 +36,20 @@ def test_client_as_user():
     token = auth.create_token(
         UserAuthData(username=user.username, user_id=user.id), trusted_client=True
     )
-    headers = {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def test_client_as_admin():
+    headers = create_test_client_with_user(is_admin=True)
+    with TestClient(app) as client:
+        client.headers = headers
+        yield client
+
+
+@pytest.fixture(scope="function")
+def test_client_as_user():
+    headers = create_test_client_with_user(is_admin=False)
     with TestClient(app) as client:
         client.headers = headers
         yield client

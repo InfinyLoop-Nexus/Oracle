@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from api.user.user_router import user_router
 from api.search.search_router import search_router
+from api.jobs.job_router import job_router
 import uvicorn
 
 app = FastAPI()
 app.include_router(user_router, tags=["Users"])
 app.include_router(search_router, tags=["Searches"])
+app.include_router(job_router, tags=["Jobs"])
 
 
 @app.get("/health")

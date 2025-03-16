@@ -1,7 +1,7 @@
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import Field, SQLModel, Relationship, Column, DateTime
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
-from sqlalchemy.sql import func
+from data.models.utils import update_timestamp
 
 # Import only during type checking to avoid runtime circular imports
 if TYPE_CHECKING:
@@ -12,10 +12,15 @@ class Job(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: Optional[datetime] = Field(
-        default_factory=lambda: func.now(), nullable=False
+        default_factory=datetime.now,
+        sa_column=Column(DateTime, default=datetime.now, nullable=False),
     )
+
     updated_at: Optional[datetime] = Field(
-        default_factory=lambda: func.now(), nullable=False
+        default_factory=datetime.now,
+        sa_column=Column(
+            DateTime, default=datetime.now, onupdate=update_timestamp, nullable=False
+        ),
     )
     title: str = Field(nullable=False)
     description: str = Field(nullable=False)
