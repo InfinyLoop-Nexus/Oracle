@@ -22,6 +22,7 @@ class Rating(SQLModel, table=True):
     updated_at: Optional[datetime] = Field(
         default_factory=lambda: func.now(), nullable=False
     )
+    archived: bool = Field(default=False, nullable=False)
     user_rated: bool = Field(default=False, nullable=False)
     user_rating: Optional[float] = Field(default=None, nullable=True)
     user_rating_positives: Optional[str] = Field(default=None, nullable=True)
