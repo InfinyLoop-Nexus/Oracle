@@ -74,6 +74,39 @@ def test_create_search(test_client_as_user, test_db_session):  # noqa: F811
     assert search_exists is not None
 
 
+def test_create_search_with_id_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    payload = {
+        "id": 1,
+        "job_title": "Engineer",
+        "date_posted": "2023-10-10",
+        "working_model": "remote",
+        "location": "NY",
+        "scraping_amount": 5,
+        "platform": "LinkedIn",
+        "user_id": 1,
+    }
+    result = test_client_as_user.post("/search/create", json=payload)
+    assert result.status_code == 400
+
+
+def test_create_search_for_another_user_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    payload = {
+        "user_id": 999,
+        "job_title": "Engineer",
+        "date_posted": "2023-10-10",
+        "working_model": "remote",
+        "location": "NY",
+        "scraping_amount": 5,
+        "platform": "LinkedIn",
+    }
+    result = test_client_as_user.post("/search/create", json=payload)
+    assert result.status_code == 403
+
+
 def test_admin_can_create_search_for_others(
     test_client_as_user, test_db_session  # noqa: F811
 ):
@@ -131,6 +164,59 @@ def test_update_own_search(test_client_as_user, test_db_session):  # noqa: F811
     test_db_session.expire_all()
     updated_search = test_db_session.get(Search, search.id)
     assert updated_search.job_title == "Updated Title"
+
+
+def test_update_search_without_id_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    payload = {
+        "job_title": "Updated Title",
+        "date_posted": "2023-10-10",
+        "working_model": "remote",
+    }
+    result = test_client_as_user.post("/search/update", json=payload)
+    assert result.status_code == 400
+
+
+def test_update_nonexistent_search_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    payload = {
+        "id": 999,
+        "job_title": "Updated Title",
+        "date_posted": "2023-10-10",
+        "working_model": "remote",
+    }
+    result = test_client_as_user.post("/search/update", json=payload)
+    assert result.status_code == 404
+
+
+def test_update_search_for_another_user_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    search = Search(
+        user_id=999,
+        job_title="User Job",
+        date_posted="2023-10-10",
+        working_model="office",
+        location="LA",
+        scraping_amount=2,
+        platform="Indeed",
+    )
+    test_db_session.add(search)
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    payload = {
+        "id": search.id,
+        "user_id": search.user_id,
+        "job_title": "Admin Updated",
+        "date_posted": search.date_posted,
+        "working_model": search.working_model,
+    }
+
+    result = test_client_as_user.post("/search/update", json=payload)
+    assert result.status_code == 403
 
 
 def test_admin_can_update_other_users_search(
@@ -233,3 +319,32 @@ def test_delete_own_search(test_client_as_user, test_db_session):  # noqa: F811
     ).scalar_one_or_none()
 
     assert search_exists is None
+
+
+def test_delete_nonexistent_search_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    result = test_client_as_user.delete("/search/delete/999")
+    assert result.status_code == 404
+
+
+def test_delete_search_for_another_user_fails(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    search = Search(
+        user_id=999,
+        job_title="To be deleted",
+        date_posted="2023-10-10",
+        working_model="remote",
+        location="NY",
+        scraping_amount=5,
+        platform="LinkedIn",
+    )
+    test_db_session.add(search)
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    search_id = search.id
+
+    result = test_client_as_user.delete(f"/search/delete/{search_id}")
+    assert result.status_code == 403
