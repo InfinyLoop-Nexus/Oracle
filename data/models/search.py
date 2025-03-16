@@ -1,13 +1,10 @@
 from sqlmodel import Column, DateTime, SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from data.models.utils import update_timestamp
 
 if TYPE_CHECKING:
     from data.models.user import User
-
-
-def update_timestamp(context):
-    return datetime.now()
 
 
 class Search(SQLModel, table=True):
