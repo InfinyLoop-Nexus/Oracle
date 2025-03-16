@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 search_router = APIRouter(prefix="/search")
 
 
-@search_router.get("/read_all", response_model=List[Search])
-async def read_all_searches(admin=Depends(get_admin), db: Session = Depends(get_db)):
+@search_router.get("/all", response_model=List[Search])
+async def get_all_searches(admin=Depends(get_admin), db: Session = Depends(get_db)):
     return db.query(Search).all()
 
 
-@search_router.get("/read", response_model=List[Search])
-async def read_searches(user=Depends(get_user), db: Session = Depends(get_db)):
+@search_router.get("/mine", response_model=List[Search])
+async def get_searches(user=Depends(get_user), db: Session = Depends(get_db)):
     return db.query(Search).filter(Search.user_id == user.id).all()
 
 
@@ -36,7 +36,6 @@ async def create_search(
 
     db.add(search)
     db.commit()
-    db.refresh(search)
     return {"message": "Search created successfully"}
 
 
@@ -55,11 +54,12 @@ async def update(search: Search, user=Depends(get_user), db: Session = Depends(g
 
     update_data = search.model_dump(exclude_unset=True)
 
+    ignored_fields = ["id", "user_id", "created_at", "updated_at"]
     for key, value in update_data.items():
-        setattr(existing_search, key, value)
+        if (key not in ignored_fields):
+            setattr(existing_search, key, value)
 
     db.commit()
-    db.refresh(existing_search)
     return {"message": "Search updated successfully"}
 
 

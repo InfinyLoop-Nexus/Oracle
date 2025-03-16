@@ -2,20 +2,21 @@ from sqlmodel import select
 from data.models.user import User
 from data.models.search import Search
 from tests.fixtures import test_client_as_user, test_db_session  # noqa: F401
-
+from datetime import datetime, timedelta
+import time
 
 def test_read_all_searches_admin_only(
     test_client_as_user, test_db_session  # noqa: F811
 ):
     """Ensures only admins can access all searches."""
-    result = test_client_as_user.get("/search/read_all")
+    result = test_client_as_user.get("/search/all")
     assert result.status_code == 403  # Non-admin should be forbidden
 
     user = test_db_session.get(User, 1)
     user.admin = True
     test_db_session.commit()
 
-    result = test_client_as_user.get("/search/read_all")
+    result = test_client_as_user.get("/search/all")
     assert result.status_code == 200  # Admin should be able to access
 
 
@@ -43,9 +44,8 @@ def test_read_my_searches(test_client_as_user, test_db_session):  # noqa: F811
     test_db_session.add(user_search)
     test_db_session.add(another_user_search)
     test_db_session.commit()
-    test_db_session.refresh(user_search)
 
-    result = test_client_as_user.get("/search/read")
+    result = test_client_as_user.get("/search/mine")
     assert result.status_code == 200
 
     result_data = result.json()
@@ -53,7 +53,7 @@ def test_read_my_searches(test_client_as_user, test_db_session):  # noqa: F811
     assert result_data[0]["user_id"] == 1  # Should only return searches for user 1
 
 
-def test_create_search(test_client_as_user, test_db_session):  # noqa: F811
+def test_create_search(test_client_as_user, test_db_session):
     """Tests if a search can be successfully created and persisted in DB."""
     payload = {
         "job_title": "Engineer",
@@ -72,6 +72,40 @@ def test_create_search(test_client_as_user, test_db_session):  # noqa: F811
         select(Search).where(Search.job_title == "Engineer")
     ).scalar_one_or_none()
     assert search_exists is not None
+
+    assert search_exists.created_at is not None
+    assert search_exists.updated_at is not None
+
+    now = datetime.now()
+    assert now - timedelta(minutes=1) <= search_exists.created_at <= now
+    assert now - timedelta(minutes=1) <= search_exists.updated_at <= now
+
+
+def test_update_search_updates_timestamp(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    """Tests if updating a search automatically updates the updated_at field."""
+    search = Search(
+        job_title="Engineer",
+        date_posted="2023-10-10",
+        working_model="remote",
+        location="NY",
+        scraping_amount=5,
+        platform="LinkedIn",
+        user_id=1,
+    )
+    test_db_session.add(search)
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    initial_updated_at = search.updated_at
+
+    search.job_title = "Senior Engineer"
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    assert search.updated_at is not None and initial_updated_at is not None
+    assert search.updated_at > initial_updated_at, "updated_at should be updated on modification"
 
 
 def test_create_search_with_id_fails(
