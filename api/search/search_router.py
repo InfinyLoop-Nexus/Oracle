@@ -56,7 +56,7 @@ async def update(search: Search, user=Depends(get_user), db: Session = Depends(g
 
     ignored_fields = ["id", "user_id", "created_at", "updated_at"]
     for key, value in update_data.items():
-        if (key not in ignored_fields):
+        if key not in ignored_fields:
             setattr(existing_search, key, value)
 
     db.commit()

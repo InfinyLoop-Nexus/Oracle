@@ -3,7 +3,7 @@ from data.models.user import User
 from data.models.search import Search
 from tests.fixtures import test_client_as_user, test_db_session  # noqa: F401
 from datetime import datetime, timedelta
-import time
+
 
 def test_read_all_searches_admin_only(
     test_client_as_user, test_db_session  # noqa: F811
@@ -53,7 +53,7 @@ def test_read_my_searches(test_client_as_user, test_db_session):  # noqa: F811
     assert result_data[0]["user_id"] == 1  # Should only return searches for user 1
 
 
-def test_create_search(test_client_as_user, test_db_session):
+def test_create_search(test_client_as_user, test_db_session):  # noqa: F811
     """Tests if a search can be successfully created and persisted in DB."""
     payload = {
         "job_title": "Engineer",
@@ -105,7 +105,9 @@ def test_update_search_updates_timestamp(
     test_db_session.refresh(search)
 
     assert search.updated_at is not None and initial_updated_at is not None
-    assert search.updated_at > initial_updated_at, "updated_at should be updated on modification"
+    assert (
+        search.updated_at > initial_updated_at
+    ), "updated_at should be updated on modification"
 
 
 def test_create_search_with_id_fails(

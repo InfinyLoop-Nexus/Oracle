@@ -1,8 +1,6 @@
 from sqlmodel import Column, DateTime, SQLModel, Field, Relationship
-from typing_extensions import Annotated
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
-from sqlmodel import func
 
 if TYPE_CHECKING:
     from data.models.user import User
