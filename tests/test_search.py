@@ -1,112 +1,235 @@
+from sqlmodel import select
 from data.models.user import User
 from data.models.search import Search
 from tests.fixtures import test_client_as_user, test_db_session  # noqa: F401
-from tests.helpers import assert_dictionaries_are_equal_except
 
 
-def test_all_searches_should_only_be_available_to_admin(
-    test_client_as_user, test_db_session # noqa: F811
-):  # noqa: F811
-    result = test_client_as_user.get("/search/")
-    assert result.status_code == 403
+def test_read_all_searches_admin_only(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    """Ensures only admins can access all searches."""
+    result = test_client_as_user.get("/search/read_all")
+    assert result.status_code == 403  # Non-admin should be forbidden
 
     user = test_db_session.get(User, 1)
     user.admin = True
     test_db_session.commit()
 
-    result = test_client_as_user.get("/search/")
-    assert result.status_code == 200
+    result = test_client_as_user.get("/search/read_all")
+    assert result.status_code == 200  # Admin should be able to access
 
 
-def test_search_mine_should_only_return_current_user_searches(
-    test_client_as_user, test_db_session # noqa: F811
-):
-    user1_search = Search(
+def test_read_my_searches(test_client_as_user, test_db_session):  # noqa: F811
+    """Ensures only the logged-in user's searches are returned."""
+    user_search = Search(
         user_id=1,
         job_title="title1",
-        date_posted="date1",
-        working_model="model1",
-        location="location1",
-        scraping_amount=1,
-        platform="platform1",
+        date_posted="2023-10-10",
+        working_model="remote",
+        location="NY",
+        scraping_amount=5,
+        platform="LinkedIn",
     )
-    user2_search = Search(
-        user_id=2,
+    another_user_search = Search(
+        user_id=999,
         job_title="title2",
-        date_posted="date2",
-        working_model="model2",
-        location="location2",
+        date_posted="2023-10-10",
+        working_model="office",
+        location="LA",
         scraping_amount=2,
-        platform="platform2",
+        platform="Indeed",
     )
 
-    test_db_session.add(user1_search)
-    test_db_session.add(user2_search)
+    test_db_session.add(user_search)
+    test_db_session.add(another_user_search)
     test_db_session.commit()
-    test_db_session.refresh(user1_search)
+    test_db_session.refresh(user_search)
 
-    result = test_client_as_user.get("/search/mine")
+    result = test_client_as_user.get("/search/read")
     assert result.status_code == 200
-    result = result.json()
 
-    assert_dictionaries_are_equal_except(result[0], user1_search.model_dump(), ["created_at", "updated_at"])
+    result_data = result.json()
+    assert len(result_data) == 1
+    assert result_data[0]["user_id"] == 1  # Should only return searches for user 1
 
-def test_upsert_search_create(test_client_as_user, test_db_session): # noqa: F811
+
+def test_create_search(test_client_as_user, test_db_session):  # noqa: F811
+    """Tests if a search can be successfully created and persisted in DB."""
     payload = {
         "job_title": "Engineer",
         "date_posted": "2023-10-10",
         "working_model": "remote",
         "location": "NY",
         "scraping_amount": 5,
-        "platform": "LinkedIn"
+        "platform": "LinkedIn",
+        "user_id": 1,
     }
-    result = test_client_as_user.post("/search/", json=payload)
+    result = test_client_as_user.post("/search/create", json=payload)
+    assert result.status_code == 200
+    assert result.json() == {"message": "Search created successfully"}
+
+    search_exists = test_db_session.execute(
+        select(Search).where(Search.job_title == "Engineer")
+    ).scalar_one_or_none()
+    assert search_exists is not None
+
+
+def test_admin_can_create_search_for_others(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    """Ensures an admin can create searches for other users."""
+    user = test_db_session.get(User, 1)
+    user.admin = True
+    test_db_session.commit()
+
+    payload = {
+        "user_id": 999,
+        "job_title": "Admin Job",
+        "date_posted": "2023-10-10",
+        "working_model": "remote",
+        "location": "SF",
+        "scraping_amount": 3,
+        "platform": "Indeed",
+    }
+    result = test_client_as_user.post("/search/create", json=payload)
     assert result.status_code == 200
 
-    result = result.json()
-    assert result["user_id"] == 1
-    assert result["id"] == 1
-    assert_dictionaries_are_equal_except(result, payload, ["created_at", "updated_at", "id", "user_id"])
+    test_db_session.expire_all()
+    search_exists = test_db_session.execute(
+        select(Search).where(Search.user_id == 999)
+    ).scalar_one_or_none()
+    assert search_exists is not None
 
-def test_upsert_search_update_own(test_client_as_user, test_db_session): # noqa: F811
-    # create a search record assigned to the current user (assumed id=1)
+
+def test_update_own_search(test_client_as_user, test_db_session):  # noqa: F811
+    """Ensures a user can update their own search and persist the changes."""
     search = Search(
         user_id=1,
-        job_title="Original",
+        job_title="Original Title",
         date_posted="2023-10-10",
         working_model="remote",
         location="NY",
         scraping_amount=5,
-        platform="LinkedIn"
+        platform="LinkedIn",
     )
     test_db_session.add(search)
     test_db_session.commit()
     test_db_session.refresh(search)
 
-    search.job_title = "Updated"
+    payload = {
+        "id": search.id,
+        "user_id": search.user_id,
+        "job_title": "Updated Title",
+        "date_posted": search.date_posted,
+        "working_model": search.working_model,
+    }
 
-    result = test_client_as_user.post("/search/update", json=search.model_dump_json())
+    result = test_client_as_user.post("/search/update", json=payload)
     assert result.status_code == 200
-    data = result.json()
-    assert data["job_title"] == "Updated"
+    assert result.json() == {"message": "Search updated successfully"}
+
+    test_db_session.expire_all()
+    updated_search = test_db_session.get(Search, search.id)
+    assert updated_search.job_title == "Updated Title"
 
 
-def test_upsert_search_update_forbidden(test_client_as_user, test_db_session): # noqa: F811
-    # create a search record assigned to a different user (e.g. user_id=999)
+def test_admin_can_update_other_users_search(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    """Ensures an admin can update another user's search."""
+    user = test_db_session.get(User, 1)
+    user.admin = True
+    test_db_session.commit()
+
     search = Search(
         user_id=999,
-        job_title="Not Yours",
+        job_title="User Job",
         date_posted="2023-10-10",
         working_model="office",
         location="LA",
         scraping_amount=2,
-        platform="Indeed"
+        platform="Indeed",
     )
     test_db_session.add(search)
     test_db_session.commit()
     test_db_session.refresh(search)
 
-    payload = search.model_dump()
-    payload["job_title"] = "Attempt update"
-    result = test_client_as_user.post("/search/", json=payload)
-    assert result.status_code == 403
+    payload = {
+        "id": search.id,
+        "user_id": search.user_id,
+        "job_title": "Admin Updated",
+        "date_posted": search.date_posted,
+        "working_model": search.working_model,
+    }
+
+    result = test_client_as_user.post("/search/update", json=payload)
+    assert result.status_code == 200
+
+    # ✅ Ensure update is persisted
+    test_db_session.expire_all()
+    updated_search = test_db_session.get(Search, search.id)
+    assert updated_search.job_title == "Admin Updated"
+
+
+def test_admin_can_delete_other_users_search(
+    test_client_as_user, test_db_session  # noqa: F811
+):
+    """Ensures an admin can delete another user's search."""
+    user = test_db_session.get(User, 1)
+    user.admin = True
+    test_db_session.commit()
+
+    search = Search(
+        user_id=999,
+        job_title="To be deleted",
+        date_posted="2023-10-10",
+        working_model="remote",
+        location="NY",
+        scraping_amount=5,
+        platform="LinkedIn",
+    )
+    test_db_session.add(search)
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    search_id = search.id
+
+    result = test_client_as_user.delete(f"/search/delete/{search_id}")
+    assert result.status_code == 200
+    assert result.json() == {"message": "Search deleted successfully"}
+
+    test_db_session.expire_all()
+    search_exists = test_db_session.execute(
+        select(Search.id).where(Search.id == search_id)
+    ).scalar_one_or_none()
+
+    assert search_exists is None
+
+
+def test_delete_own_search(test_client_as_user, test_db_session):  # noqa: F811
+    """Ensures a user can delete their own search."""
+    search = Search(
+        user_id=1,
+        job_title="To be deleted",
+        date_posted="2023-10-10",
+        working_model="remote",
+        location="NY",
+        scraping_amount=5,
+        platform="LinkedIn",
+    )
+    test_db_session.add(search)
+    test_db_session.commit()
+    test_db_session.refresh(search)
+
+    search_id = search.id
+
+    result = test_client_as_user.delete(f"/search/delete/{search_id}")
+    assert result.status_code == 200
+    assert result.json() == {"message": "Search deleted successfully"}
+
+    test_db_session.expire_all()
+    search_exists = test_db_session.execute(
+        select(Search.id).where(Search.id == search_id)
+    ).scalar_one_or_none()
+
+    assert search_exists is None

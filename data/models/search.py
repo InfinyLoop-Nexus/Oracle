@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from pydantic import field_validator, BeforeValidator
+from pydantic import BeforeValidator
 from typing_extensions import Annotated
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
@@ -12,6 +12,7 @@ def parse_datetime(value):
     if isinstance(value, str):
         return datetime.fromisoformat(value)
     return value
+
 
 class Search(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -29,17 +30,3 @@ class Search(SQLModel, table=True):
     platform: str = Field(nullable=False)
 
     user: Optional[list["User"]] = Relationship(back_populates="searches")
-
-    @staticmethod
-    def parse(json: str) -> "Search":
-        validated: Search = Search.model_validate_json(json)
-        validated.created_at = parse_datetime(validated.created_at)
-        validated.updated_at = parse_datetime(validated.created_at)
-        return validated
-
-    @classmethod
-    @field_validator("created_at", mode="before")
-    def parse_timestamp(cls, value):
-        if isinstance(value, str):
-            return datetime.fromisoformat(value)  # parse ISO 8601 string to datetime
-        return value

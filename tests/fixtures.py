@@ -4,7 +4,7 @@ from sqlmodel import Session
 from data.database import engine, init_db, TEST_DB_PATH
 from main import app
 from data.models.user import User
-from services.auth import HashHelper, get_auth, Auth, UserAuthData
+from services.auth import HashHelper, get_auth, UserAuthData
 import os
 from services.environment_manager import get_environment
 
@@ -30,7 +30,11 @@ def test_client_as_user():
         session.refresh(user)
     environment = get_environment()
     auth = get_auth(environment)
-    token = auth.create_token(UserAuthData(username=user.username, user_id=user.id), trusted_client=True)
+    if user.id is None:
+        raise ValueError("User ID cannot be None")
+    token = auth.create_token(
+        UserAuthData(username=user.username, user_id=user.id), trusted_client=True
+    )
     headers = {"Authorization": f"Bearer {token}"}
     with TestClient(app) as client:
         client.headers = headers
