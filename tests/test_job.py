@@ -486,6 +486,52 @@ def test_sudo_unarchive_job_not_archived(
     assert "not archived" in result.json()["detail"]
 
 
+def test_delete_rating_success(test_client_as_user, test_db_session):  # noqa: F811
+    """
+    Tests that a logged-in user can delete their own job rating via /jobs/delete/{job_id}.
+
+    Steps:
+    - Create a job and add it to the database.
+    - Create a rating for the current user (user_id = 1) associated with that job.
+    - Call the DELETE endpoint with the job's id.
+    - Verify that the endpoint returns a 200 status and a confirmation message.
+    - Assert that the rating no longer exists in the database.
+    """
+    # Create a test job.
+    job = Job(title="Test Job", description="Test Description")
+    test_db_session.add(job)
+    test_db_session.commit()
+    test_db_session.refresh(job)
+
+    # Create a rating for the current user (user_id=1).
+    rating = Rating(job_id=getattr(job, "id"), user_id=1)
+    test_db_session.add(rating)
+    test_db_session.commit()
+
+    # Call the DELETE endpoint to remove the rating.
+    response = test_client_as_user.delete(f"/jobs/delete/{job.id}")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Job deleted successfully"}
+
+    # Verify the rating was deleted.
+    deleted_rating = test_db_session.exec(
+        select(Rating).where(Rating.job_id == job.id, Rating.user_id == 1)
+    ).first()
+    assert deleted_rating is None
+
+
+def test_delete_rating_not_found(test_client_as_user):  # noqa: F811
+    """
+    Tests that attempting to delete a non-existent job rating returns a 404 error.
+
+    - Calls the DELETE endpoint with a job_id for which no rating exists.
+    - Verifies that a 404 status code is returned with an appropriate error message.
+    """
+    response = test_client_as_user.delete("/jobs/delete/999999")
+    assert response.status_code == 404
+    assert "Job not found" in response.json()["detail"]
+
+
 def test_sudo_delete_rating_success(
     test_client_as_admin, test_db_session  # noqa: F811
 ):
