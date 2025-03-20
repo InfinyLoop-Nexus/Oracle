@@ -4,7 +4,12 @@ from sqlmodel import select
 from services.auth import HashHelper
 from api.user.user_router import NewUserPayload, LoginPayload
 from data.models.user import User
-from tests.fixtures import test_client, test_db_session  # noqa: F401
+from tests.fixtures import (
+    test_client,  # noqa: F401
+    test_db_session,  # noqa: F401
+    test_client_as_user,  # noqa: F401
+    test_client_as_admin,  # noqa: F401
+)
 
 
 def test_user_should_be_created(test_client, test_db_session):  # noqa: F811
@@ -471,3 +476,153 @@ def test_downgrade_admin(test_client, test_db_session):  # noqa: F811
     # Check we are still an admin
     user = test_db_session.exec(select(User).where(User.username == "adminuser2")).one()
     assert user.admin
+
+
+def test_delete_own_user_success(test_client, test_db_session):  # noqa: F811
+    """
+    Ensures a user can successfully delete their own account when no user_id is provided.
+    """
+    test_user = User(
+        username="to_delete",
+        email="delete@example.com",
+        password_hash=HashHelper.hash("test"),
+        admin=False,
+    )
+
+    test_db_session.add(test_user)
+    test_db_session.commit()
+    test_db_session.refresh(test_user)
+
+    login_payload = LoginPayload(username_or_email="to_delete", password="test")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user = test_db_session.exec(select(User).where(User.username == "to_delete")).one()
+    assert user is not None
+
+    result = test_client.delete("/user/delete", headers=headers)
+
+    assert result.status_code == 200
+    assert result.json()["message"] == "User deleted successfully"
+
+    deleted_user = test_db_session.exec(
+        select(User).where(User.username == "to_delete")
+    ).one_or_none()
+    assert deleted_user is None
+
+
+def test_admin_delete_other_user_success(test_client, test_db_session):  # noqa: F811
+    """
+    Ensures an admin can delete another user by specifying user_id.
+    """
+    admin_user = User(
+        username="admin_user",
+        email="admin@example.com",
+        password_hash=HashHelper.hash("adminpass"),
+        admin=True,
+    )
+
+    target_user = User(
+        username="user_to_delete",
+        email="delete@example.com",
+        password_hash=HashHelper.hash("testpass"),
+        admin=False,
+    )
+
+    test_db_session.add_all([admin_user, target_user])
+    test_db_session.commit()
+    test_db_session.refresh(admin_user)
+    test_db_session.refresh(target_user)
+
+    login_payload = LoginPayload(username_or_email="admin_user", password="adminpass")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user_to_delete = test_db_session.exec(
+        select(User).where(User.username == "user_to_delete")
+    ).one()
+    assert user_to_delete is not None
+
+    result = test_client.delete(
+        f"/user/delete?user_id={user_to_delete.id}", headers=headers
+    )
+
+    assert result.status_code == 200
+    assert result.json()["message"] == "User deleted successfully"
+
+    deleted_user = test_db_session.exec(
+        select(User).where(User.username == "user_to_delete")
+    ).one_or_none()
+    assert deleted_user is None
+
+
+def test_non_admin_delete_other_user_forbidden(
+    test_client, test_db_session  # noqa: F811
+):
+    """
+    Ensures a non-admin user cannot delete another user.
+    """
+    non_admin_user = User(
+        username="regular_user",
+        email="regular@example.com",
+        password_hash=HashHelper.hash("userpass"),
+        admin=False,
+    )
+
+    target_user = User(
+        username="target_user",
+        email="target@example.com",
+        password_hash=HashHelper.hash("targetpass"),
+        admin=False,
+    )
+
+    test_db_session.add_all([non_admin_user, target_user])
+    test_db_session.commit()
+    test_db_session.refresh(non_admin_user)
+    test_db_session.refresh(target_user)
+
+    login_payload = LoginPayload(username_or_email="regular_user", password="userpass")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    result = test_client.delete(
+        f"/user/delete?user_id={target_user.id}", headers=headers
+    )
+
+    assert result.status_code == 403
+    assert "Unable to delete user with id" in result.json()["detail"]
+
+    # Ensure target user was not deleted
+    existing_user = test_db_session.exec(
+        select(User).where(User.username == "target_user")
+    ).one_or_none()
+    assert existing_user is not None
+
+
+def test_delete_nonexistent_user(test_client, test_db_session):  # noqa: F811
+    """
+    Ensures that deleting a non-existent user returns a 404 error.
+    """
+    admin_user = User(
+        username="admin_user",
+        email="admin@example.com",
+        password_hash=HashHelper.hash("adminpass"),
+        admin=True,
+    )
+
+    test_db_session.add(admin_user)
+    test_db_session.commit()
+    test_db_session.refresh(admin_user)
+
+    login_payload = LoginPayload(username_or_email="admin_user", password="adminpass")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    result = test_client.delete("/user/delete?user_id=999999", headers=headers)
+
+    assert result.status_code == 404
+    assert "User not found" in result.json()["detail"]
