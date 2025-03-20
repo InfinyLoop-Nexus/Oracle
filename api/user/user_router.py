@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from services.auth import Auth, UserAuthData, get_admin, get_auth, HashHelper
+from services.auth import Auth, UserAuthData, get_admin, get_auth, get_user, HashHelper
 from sqlmodel import Session, select
 from data.models.user import User
 from data.database import get_db
@@ -216,3 +216,29 @@ def downgrade_user(
         raise HTTPException(status_code=400, detail="Can't downgrade the last admin")
     user.admin = False
     sesh.commit()
+
+
+@user_router.delete("/delete")
+async def delete_user(
+    user_id: int = Query(None), user=Depends(get_user), db: Session = Depends(get_db)
+):
+
+    if user_id is None:
+        db.delete(user)
+        db.commit()
+        return {"message": "User deleted successfully"}
+
+    if user.id != user_id and not user.admin:
+        raise HTTPException(
+            status_code=403, detail="Unable to delete user with id " + str(user_id)
+        )
+
+    existing_user = db.get(User, user_id)
+
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(existing_user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
