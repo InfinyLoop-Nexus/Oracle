@@ -4,7 +4,12 @@ from sqlmodel import select
 from services.auth import HashHelper
 from api.user.user_router import NewUserPayload, LoginPayload
 from data.models.user import User
-from tests.fixtures import test_client, test_db_session  # noqa: F401
+from tests.fixtures import (
+    test_client,  # noqa: F401
+    test_db_session,  # noqa: F401
+    test_client_as_user,  # noqa: F401
+    test_client_as_admin,  # noqa: F401
+)
 
 
 def test_user_should_be_created(test_client, test_db_session):  # noqa: F811
@@ -471,3 +476,217 @@ def test_downgrade_admin(test_client, test_db_session):  # noqa: F811
     # Check we are still an admin
     user = test_db_session.exec(select(User).where(User.username == "adminuser2")).one()
     assert user.admin
+
+
+def test_self_destruct_non_admin(test_client, test_db_session):  # noqa: F811
+    # Create a non-admin user and log in
+    payload = NewUserPayload(
+        username="nonadmin", email="nonadmin@example.com", password="ValidPa$$w0rd"
+    )
+    test_client.post("/user/create", json=payload.model_dump())
+    login_payload = LoginPayload(username_or_email="nonadmin", password="ValidPa$$w0rd")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Non-admin self-destruct should succeed
+    result = test_client.delete("/user/self-destruct", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["message"] == "User deleted successfully"
+
+    # Verify the user is actually deleted (login should fail)
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    assert result.status_code == 404
+
+
+def test_self_destruct_admin_last_admin(test_client, test_db_session):  # noqa: F811
+    # Create a single admin (last admin)
+    admin = User(
+        username="lonelyadmin",
+        email="lonelyadmin@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    test_db_session.add(admin)
+    test_db_session.commit()
+
+    login_payload = LoginPayload(
+        username_or_email="lonelyadmin", password="AdminPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Self-destruct should be blocked
+    result = test_client.delete("/user/self-destruct", headers=headers)
+    assert result.status_code == 400
+    assert "Last admin cannot be deleted" in result.json()["detail"]
+
+
+def test_self_destruct_admin_not_last(test_client, test_db_session):  # noqa: F811
+    # Create two admins so that one can self-destruct safely
+    admin1 = User(
+        username="admin1",
+        email="admin1@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    admin2 = User(
+        username="admin2",
+        email="admin2@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    test_db_session.add(admin1)
+    test_db_session.add(admin2)
+    test_db_session.commit()
+
+    login_payload = LoginPayload(username_or_email="admin1", password="AdminPa$$w0rd")
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Self-destruct should work now
+    result = test_client.delete("/user/self-destruct", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["message"] == "User deleted successfully"
+
+
+def test_sudo_delete_no_user_id(test_client, test_db_session):  # noqa: F811
+    # Create an admin user
+    admin = User(
+        username="adminnouserid",
+        email="adminnouserid@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    test_db_session.add(admin)
+    test_db_session.commit()
+
+    login_payload = LoginPayload(
+        username_or_email="adminnouserid", password="AdminPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Missing user_id query param leads to a validation error (422)
+    result = test_client.delete("/user/sudo-delete", headers=headers)
+    assert result.status_code == 422
+
+
+def test_sudo_delete_self(test_client, test_db_session):  # noqa: F811
+    # Create an admin user
+    admin = User(
+        username="adminself",
+        email="adminself@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    test_db_session.add(admin)
+    test_db_session.commit()
+
+    login_payload = LoginPayload(
+        username_or_email="adminself", password="AdminPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Attempting to delete yourself with sudo-delete should be forbidden
+    result = test_client.delete(
+        f"/user/sudo-delete?user_id={admin.id}", headers=headers
+    )
+    assert result.status_code == 400
+    assert "Use /user/self-destruct route to delete yourself" in result.json()["detail"]
+
+
+def test_sudo_delete_user_not_found(test_client, test_db_session):  # noqa: F811
+    # Create an admin user
+    admin = User(
+        username="adminnotfound",
+        email="adminnotfound@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    test_db_session.add(admin)
+    test_db_session.commit()
+
+    login_payload = LoginPayload(
+        username_or_email="adminnotfound", password="AdminPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Trying to delete a non-existent user should return 404
+    result = test_client.delete("/user/sudo-delete?user_id=9999", headers=headers)
+    assert result.status_code == 404
+    assert "User with ID 9999 not found" in result.json()["detail"]
+
+
+def test_sudo_delete_success(test_client, test_db_session):  # noqa: F811
+    # Create an admin and a regular user to delete
+    admin = User(
+        username="admindelete",
+        email="admindelete@example.com",
+        password_hash=HashHelper.hash("AdminPa$$w0rd"),
+        admin=True,
+    )
+    user = User(
+        username="delete_me",
+        email="delete_me@example.com",
+        password_hash=HashHelper.hash("TestPa$$w0rd"),
+        admin=False,
+    )
+    test_db_session.add(admin)
+    test_db_session.add(user)
+    test_db_session.commit()
+    test_db_session.refresh(user)
+    user_id = user.id
+
+    login_payload = LoginPayload(
+        username_or_email="admindelete", password="AdminPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Sudo-delete the regular user
+    result = test_client.delete(f"/user/sudo-delete?user_id={user_id}", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["message"] == "User deleted successfully"
+
+    # Verify the user is gone
+    test_db_session.expire_all()
+    deleted_user = test_db_session.get(User, user_id)
+    assert deleted_user is None
+
+
+def test_sudo_delete_non_admin(test_client, test_db_session):  # noqa: F811
+    # Create and log in as a non-admin user
+    payload = NewUserPayload(
+        username="nonadmin2", email="nonadmin2@example.com", password="ValidPa$$w0rd"
+    )
+    test_client.post("/user/create", json=payload.model_dump())
+    login_payload = LoginPayload(
+        username_or_email="nonadmin2", password="ValidPa$$w0rd"
+    )
+    result = test_client.post("/user/login", json=login_payload.model_dump())
+    token = result.json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create a target user to attempt deletion
+    user = User(
+        username="targetuser",
+        email="targetuser@example.com",
+        password_hash=HashHelper.hash("TestPa$$w0rd"),
+        admin=False,
+    )
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    # Non-admin tries to delete using sudo-delete; should be rejected
+    result = test_client.delete(f"/user/sudo-delete?user_id={user.id}", headers=headers)
+    assert result.status_code == 403
+    assert "Forbidden" in "".join(result.json()["detail"])

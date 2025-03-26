@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from services.auth import Auth, UserAuthData, get_admin, get_auth, HashHelper
+from services.auth import Auth, UserAuthData, get_admin, get_auth, get_user, HashHelper
 from sqlmodel import Session, select
 from data.models.user import User
 from data.database import get_db
@@ -216,3 +216,70 @@ def downgrade_user(
         raise HTTPException(status_code=400, detail="Can't downgrade the last admin")
     user.admin = False
     sesh.commit()
+
+
+@user_router.delete("/self-destruct")
+async def delete_self(db: Session = Depends(get_db), user=Depends(get_user)):
+    """
+    Delete the authenticated user's account.
+
+    Args:
+        db (Session): Database session.
+        user (User): Authenticated user.
+
+    Raises:
+        HTTPException: If the user is the last admin.
+
+    Returns:
+        dict: Success message.
+    """
+    admin_count = len(db.exec(select(User).where(User.admin)).all())
+
+    if user.admin and admin_count == 1:
+        raise HTTPException(status_code=400, detail="Last admin cannot be deleted")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
+
+
+@user_router.delete("/sudo-delete")
+async def delete_user(
+    user_id: int = Query(...),
+    admin: User = Depends(get_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a user by ID.
+
+    Args:
+        user_id (int): ID of the user to delete.
+        admin (User): Admin user.
+        db (Session): Database session.
+
+    Raises:
+        HTTPException: If user ID is not provided, if the admin tries to delete themselves, or if the user is not found.
+
+    Returns:
+        dict: Success message.
+    """
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="User ID is required")
+
+    if user_id == admin.id:
+        raise HTTPException(
+            status_code=400, detail="Use /user/self-destruct route to delete yourself"
+        )
+
+    user = db.exec(select(User).where(User.id == user_id)).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=404, detail="User with ID " + str(user_id) + " not found"
+        )
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
