@@ -3,19 +3,19 @@ from services.auth import get_admin, get_user
 from typing import List
 from data.models.search import Search
 from data.database import get_db
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 
 search_router = APIRouter(prefix="/search")
 
 
 @search_router.get("/all", response_model=List[Search])
 async def get_all_searches(admin=Depends(get_admin), db: Session = Depends(get_db)):
-    return db.query(Search).all()
+    return db.exec(select(Search)).all()
 
 
 @search_router.get("/mine", response_model=List[Search])
 async def get_searches(user=Depends(get_user), db: Session = Depends(get_db)):
-    return db.query(Search).filter(Search.user_id == user.id).all()
+    return db.exec(select(Search).where(Search.user_id == user.id)).all()
 
 
 @search_router.post("/create")
@@ -79,3 +79,9 @@ async def delete_search(
     db.commit()
 
     return {"message": "Search deleted successfully"}
+
+@search_router.post("/run-all")
+async def run(user=Depends(get_user), db: Session = Depends(get_db)):
+    searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
+
+    return {"message": "Search run successfully"}
