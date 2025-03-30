@@ -4,7 +4,6 @@ from typing import List
 from data.models.search import Search
 from data.database import get_db
 from sqlmodel import Session, select
-import asyncio
 
 search_router = APIRouter(prefix="/search")
 
@@ -81,6 +80,7 @@ async def delete_search(
 
     return {"message": "Search deleted successfully"}
 
+
 @search_router.post("/run-all")
 async def run(user=Depends(get_user), db: Session = Depends(get_db)):
     searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
@@ -90,9 +90,14 @@ async def run(user=Depends(get_user), db: Session = Depends(get_db)):
 
 @search_router.websocket("/health")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket health-check endpoint that echoes messages.
 
+    Accepts a WebSocket connection, sends a "Hi!" greeting, and echoes each received message
+    prefixed with "Message recived was: ".
+    """
     await websocket.accept()
     await websocket.send_text("Hi!")
     while True:
-        text = await websocket.receive_text()
-        await websocket.send_text(f"Message recived was: {text}")
+        message = await websocket.receive_text()
+        await websocket.send_text(f"Message recived was: {message}")

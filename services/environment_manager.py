@@ -24,6 +24,7 @@ def get_int(value: str | None, key: str) -> int | None:
     except ValueError:
         raise ValueError(f"Value of '{key}' cannot be converted to an integer.")
 
+
 class EnvirontmentManager:
     def __init__(self):
 
@@ -34,7 +35,9 @@ class EnvirontmentManager:
         else:
             load_dotenv()
             secret_key = getenv("SECRET_KEY") or not_found_exception("SECRET_KEY")
-            app_port = get_int(getenv("APP_PORT"), "APP_PORT") or not_found_exception("APP_PORT")
+            app_port = get_int(getenv("APP_PORT"), "APP_PORT") or not_found_exception(
+                "APP_PORT"
+            )
 
             self.environment = Environment(secret_key=secret_key, app_port=app_port)
 
