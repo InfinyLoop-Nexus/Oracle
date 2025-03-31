@@ -32,3 +32,23 @@ async def test_websocket():
         await websocket.send("test")
         response = await websocket.recv()
         assert response == "Message recived was: test"
+
+@pytest.mark.asyncio
+async def test_websocket_ping():
+    uri = "ws://localhost:7999/search/run-all"
+    async with websockets.connect(uri) as websocket:
+        response = await websocket.recv()
+        assert response == "ping"
+        await websocket.send("pong")
+        await websocket.close(code=1000)
+
+@pytest.mark.asyncio
+async def test_websocket_ping():
+    uri = "ws://localhost:7999/search/run-all"
+    async with websockets.connect(uri) as websocket:
+        response = await websocket.recv()
+        assert response == "ping"
+        try:
+            await websocket.send("pang")
+        except Exception as e:
+            assert e.code == 1008

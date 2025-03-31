@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi.websockets import WebSocketDisconnect
+from enum import Enum
 from services.auth import get_admin, get_user
 from typing import List
 from data.models.search import Search
@@ -81,12 +83,26 @@ async def delete_search(
     return {"message": "Search deleted successfully"}
 
 
-@search_router.post("/run-all")
-async def run(user=Depends(get_user), db: Session = Depends(get_db)):
-    searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
+class RunAllStep(Enum):
+     START = "start {[nb_searches] : int ( nb_of_jobs )}"
+     RUN = "running {current_search} {current_job}"
+     FINISH = "finish"
+@search_router.websocket("/run-all")
+async def run(websocket: WebSocket, user=Depends(get_user), db: Session = Depends(get_db)):
+    await websocket.accept()
+    try:
+        await websocket.send_text("ping")
+        pong = await websocket.receive_text()
+        if pong != "pong":
+            await websocket.close(code=1008)
+    except Exception as e:
+        await websocket.close(code=1008)
+
+    # searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
+
 
     return {"message": "Search run successfully"}
-
+#  connect ws /search/run-all
 
 @search_router.websocket("/health")
 async def websocket_endpoint(websocket: WebSocket):
@@ -96,8 +112,12 @@ async def websocket_endpoint(websocket: WebSocket):
     Accepts a WebSocket connection, sends a "Hi!" greeting, and echoes each received message
     prefixed with "Message recived was: ".
     """
-    await websocket.accept()
-    await websocket.send_text("Hi!")
-    while True:
-        message = await websocket.receive_text()
-        await websocket.send_text(f"Message recived was: {message}")
+    try:
+        await websocket.accept()
+        await websocket.send_text("Hi!")
+        while True:
+            message = await websocket.receive_text()
+            await websocket.send_text(f"Message recived was: {message}")
+    except WebSocketDisconnect:
+        print("Client disconnected")
+        pass
