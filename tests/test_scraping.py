@@ -3,6 +3,8 @@ import threading
 import time
 import uvicorn
 import websockets
+
+from api.user.user_router import NewUserPayload, LoginPayload
 from main import app
 import requests
 from data.models.user import User
@@ -12,28 +14,6 @@ from services.auth import get_user
 
 @pytest.fixture(scope="module", autouse=True)
 def run_server():
-    app.dependency_overrides[get_user] = lambda: User(
-        id=1,
-        create_at=datetime.datetime.now(),
-        update_at=datetime.datetime.now(),
-        username="something",
-        email="something",
-        password_hash="something",
-        tokens_spent_lifetime=0,
-        tokens_spent_current_month=0,
-        tokens_spent_counter=0,
-        home_address="",
-        self_assessment="",
-        job_prototype="",
-        job_preferences="",
-        job_dislikes="",
-        desired_compensation="",
-        cover_letter="",
-        resume="",
-        encoded_openai_api_key="",
-        duplicate_behavior="skip_duplicates",
-        admin=False,
-    )
     config = uvicorn.Config(app, host="127.0.0.1", port=7999, log_level="info")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
@@ -49,7 +29,9 @@ def run_server():
             else:
                 time.sleep(0.1)
         except:
+            print("i excepted")
             pass
+    print("i exited")
 
     yield
 
@@ -72,12 +54,24 @@ async def test_websocket():
 
 @pytest.mark.asyncio(scope="function")
 async def test_websocket_ping():
+    payload = NewUserPayload(
+        username="testuser", email="testuser@example.com", password="TestPa$$w0rd"
+    )
+    requests.post("http://localhost:7999/user/create", json=payload.model_dump())
+    login_payload = LoginPayload(username_or_email="testuser", password="TestPa$$w0rd")
+
+    result = requests.post(
+        "http://localhost:7999/user/login", json=login_payload.model_dump()
+    )
+
     uri = "ws://localhost:7999/search/run-all"
     async with websockets.connect(uri) as websocket:
         response = await websocket.recv()
         assert response == "ping"
         await websocket.send("pong")
         await websocket.wait_closed()
+        assert websocket.close_code == 1000
+
 
 @pytest.mark.asyncio
 async def test_websocket_ping_does_not_work():

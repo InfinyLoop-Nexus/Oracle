@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from fastapi.websockets import WebSocketDisconnect
 from enum import Enum
-from services.auth import get_admin, get_user
+from services.auth import get_admin, get_user, get_user_ws
 from typing import List
 from data.models.search import Search
 from data.database import get_db
@@ -87,13 +87,15 @@ class RunAllStep(Enum):
      START = "start {[nb_searches] : int ( nb_of_jobs )}"
      RUN = "running {current_search} {current_job}"
      FINISH = "finish"
+
 @search_router.websocket("/run-all")
-async def run(websocket: WebSocket, user=Depends(get_user), db: Session = Depends(get_db)):
+async def run(websocket: WebSocket,user = Depends(get_user_ws), db = Depends(get_db)):
     await websocket.accept()
     await websocket.send_text("ping")
     pong = await websocket.receive_text()
     if pong != "pong":
         await websocket.close(code=1008)
+    await websocket.close(code=1000)
 
     # searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
 

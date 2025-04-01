@@ -1,7 +1,7 @@
 from data.database import get_db
 from data.models.user import User
 from sqlmodel import Session
-from fastapi import HTTPException
+from fastapi import HTTPException, WebSocket
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from services.environment_manager import get_environment, Environment
 from jose import jwt, JWTError
@@ -90,12 +90,7 @@ def get_auth(environment: Environment = Depends(get_environment)) -> Auth:
 security = HTTPBearer()
 
 
-def get_user(
-    authorization: HTTPAuthorizationCredentials = Depends(security),
-    auth: Auth = Depends(get_auth),
-    db: Session = Depends(get_db),
-) -> User:
-    token = authorization.credentials
+def get_user_from_token(auth, db, token) -> User:
     user_auth_data = auth.decode_token(token)
 
     user = db.get(User, user_auth_data.user_id)
@@ -103,6 +98,23 @@ def get_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     return user
+
+def get_user(
+    authorization: HTTPAuthorizationCredentials = Depends(security),
+    auth: Auth = Depends(get_auth),
+    db: Session = Depends(get_db),
+) -> User:
+    token = authorization.credentials
+    return get_user_from_token(auth, db, token)
+
+
+def get_user_ws(
+    websocket: WebSocket,
+    auth: Auth = Depends(get_auth),
+    db: Session = Depends(get_db),
+) -> User:
+    token = websocket.headers.get("Authorization").split(" ")[1]
+    get_user_from_token(auth, db, token)
 
 
 def get_admin(user: User = Depends(get_user)) -> User:
