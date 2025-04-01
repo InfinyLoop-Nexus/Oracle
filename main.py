@@ -1,5 +1,7 @@
+from http.client import HTTPResponse
+
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from api.user.user_router import user_router
 from api.search.search_router import search_router
 from api.jobs.job_router import job_router
@@ -18,6 +20,8 @@ app.add_middleware(
 app.include_router(user_router, tags=["Users"])
 app.include_router(search_router, tags=["Searches"])
 app.include_router(job_router, tags=["Jobs"])
+app.add_route("/health", lambda r: Response(status_code=200) , methods=["GET"])
+
 
 
 @app.get("/health")

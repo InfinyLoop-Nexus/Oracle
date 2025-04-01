@@ -90,12 +90,9 @@ class RunAllStep(Enum):
 @search_router.websocket("/run-all")
 async def run(websocket: WebSocket, user=Depends(get_user), db: Session = Depends(get_db)):
     await websocket.accept()
-    try:
-        await websocket.send_text("ping")
-        pong = await websocket.receive_text()
-        if pong != "pong":
-            await websocket.close(code=1008)
-    except Exception as e:
+    await websocket.send_text("ping")
+    pong = await websocket.receive_text()
+    if pong != "pong":
         await websocket.close(code=1008)
 
     # searches = db.exec(select(Search).where(Search.user_id == user.id)).all()
